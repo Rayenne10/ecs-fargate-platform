@@ -1,0 +1,143 @@
+name: Deploy or manage AWS demo
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Plan previews resources; apply creates paid AWS resources; destroy removes workload.
+        type: choice
+        options: [plan, apply, rollback, destroy]
+        default: plan
+      release_sha:
+        description: Existing 40-character image commit SHA; required for rollback, optional for destroy.
+        type: string
+        required: false
+permissions:
+  contents: read
+concurrency:
+  group: aws-demo-workload
+  cancel-in-progress: false
+jobs:
+  verify:
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || vars.ENABLE_AUTO_DEPLOY == 'true')
+    uses: ./.github/workflows/ci.yaml
+  deploy:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    environment: aws-demo
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      AWS_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+      STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+      TF_VAR_project_name: ${{ vars.PROJECT_NAME }}
+      TF_VAR_aws_region: ${{ vars.AWS_REGION }}
+      TF_VAR_execution_role_arn: ${{ vars.EXECUTION_ROLE_ARN }}
+      TF_VAR_task_role_arn: ${{ vars.TASK_ROLE_ARN }}
+      TF_VAR_allowed_ingress_cidrs: ${{ vars.ALLOWED_INGRESS_CIDRS || '["0.0.0.0/0"]' }}
+      TF_VAR_certificate_arn: ${{ vars.CERTIFICATE_ARN }}
+      TF_VAR_public_hostname: ${{ vars.PUBLIC_HOSTNAME }}
+      TF_IN_AUTOMATION: 'true'
+      OPERATION: ${{ github.event_name == 'push' && 'apply' || inputs.operation }}
+      REQUESTED_SHA: ${{ inputs.release_sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.13.5'
+          terraform_wrapper: false
+      - name: Check configuration and release input
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in AWS_REGION AWS_ROLE_ARN STATE_BUCKET ECR_REPOSITORY TF_VAR_project_name TF_VAR_execution_role_arn TF_VAR_task_role_arn; do
+            test -n "${!name}" || { echo "Missing GitHub variable: $name"; exit 1; }
+          done
+          if [ "$OPERATION" = rollback ] && [ -z "$REQUESTED_SHA" ]; then echo 'Rollback requires a previous release SHA'; exit 1; fi
+          RELEASE_SHA="${REQUESTED_SHA:-$GITHUB_SHA}"
+          [[ "$RELEASE_SHA" =~ ^[a-f0-9]{40}$ ]] || { echo 'Invalid release SHA'; exit 1; }
+          if [ "$OPERATION" != rollback ] && [ "$OPERATION" != destroy ] && [ "$RELEASE_SHA" != "$GITHUB_SHA" ]; then echo 'Use rollback to select an older release'; exit 1; fi
+          echo "TF_VAR_app_revision=$RELEASE_SHA" >> "$GITHUB_ENV"
+      - uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: fargate-${{ github.run_id }}
+          role-duration-seconds: 3600
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: ecr
+      - name: Find the immutable release
+        if: env.OPERATION != 'destroy'
+        id: lookup
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=()
+          if [ "$OPERATION" = rollback ]; then args+=(--required); fi
+          python scripts/resolve_image.py --repository "$ECR_REPOSITORY" --revision "$TF_VAR_app_revision" --region "$AWS_REGION" "${args[@]}" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+        if: env.OPERATION != 'destroy' && steps.lookup.outputs.exists != 'true'
+      - uses: docker/build-push-action@v6
+        id: build
+        if: env.OPERATION != 'destroy' && steps.lookup.outputs.exists != 'true'
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          tags: ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:sha-${{ env.TF_VAR_app_revision }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Initialize remote state
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir=infra/workload init -input=false -lockfile=readonly -backend-config="bucket=$STATE_BUCKET" -backend-config="region=$AWS_REGION" -backend-config='key=workload/terraform.tfstate' -backend-config='encrypt=true' -backend-config='use_lockfile=true'
+      - name: Choose image or restore current variables for destroy
+        env:
+          IMAGE_DIGEST: ${{ steps.lookup.outputs.digest || steps.build.outputs.digest }}
+          IMAGE_REGISTRY: ${{ steps.ecr.outputs.registry }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$OPERATION" = destroy ]; then
+            IMAGE_URI="$(terraform -chdir=infra/workload output -raw image_uri)"
+            REVISION="$(terraform -chdir=infra/workload output -raw app_revision)"
+          else
+            [[ "$IMAGE_DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]] || { echo 'Invalid image digest'; exit 1; }
+            IMAGE_URI="$IMAGE_REGISTRY/$ECR_REPOSITORY@$IMAGE_DIGEST"
+            REVISION="$TF_VAR_app_revision"
+          fi
+          echo "TF_VAR_image_uri=$IMAGE_URI" >> "$GITHUB_ENV"
+          echo "TF_VAR_app_revision=$REVISION" >> "$GITHUB_ENV"
+      - name: Create and show the exact Terraform plan
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=()
+          if [ "$OPERATION" = destroy ]; then args+=(-destroy); fi
+          terraform -chdir=infra/workload plan -input=false -lock-timeout=5m "${args[@]}" -out=tfplan
+          terraform -chdir=infra/workload show -no-color tfplan
+      - name: Apply the saved plan
+        if: env.OPERATION != 'plan'
+        run: terraform -chdir=infra/workload apply -input=false tfplan
+      - name: Verify ECS rollout and served application revision
+        if: env.OPERATION == 'apply' || env.OPERATION == 'rollback'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/verify_deployment.py --url "$(terraform -chdir=infra/workload output -raw alb_url)" --revision "$TF_VAR_app_revision" --cluster "$(terraform -chdir=infra/workload output -raw ecs_cluster)" --service "$(terraform -chdir=infra/workload output -raw ecs_service)" --task-definition "$(terraform -chdir=infra/workload output -raw task_definition_arn)" --region "$AWS_REGION"
+          echo "Verified release: $TF_VAR_app_revision" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: success() && (env.OPERATION == 'apply' || env.OPERATION == 'rollback')
+        with:
+          name: deployment-receipt-${{ github.run_id }}
+          path: verification/deployment.json

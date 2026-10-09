@@ -1,0 +1,12 @@
+services:
+  api:
+    build: .
+    image: ecs-fargate-platform:local
+    ports: ["127.0.0.1:8000:8000"]
+    environment:
+      APP_ENV: local-container
+      APP_REVISION: development
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]

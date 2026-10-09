@@ -1,0 +1,7 @@
+aws_region = "eu-west-3"
+project_name = "fargate-demo"
+state_bucket_name = "REPLACE-WITH-GLOBALLY-UNIQUE-BUCKET"
+# Copy the exact sub printed by the Inspect OIDC subject workflow; do not guess.
+github_oidc_subject = "repo:Rayenne10@OWNER_ID/ecs-fargate-platform@REPO_ID:environment:aws-demo"
+# existing_oidc_provider_arn = "arn:aws:iam::ACCOUNT:oidc-provider/token.actions.githubusercontent.com"
+# create_ecs_service_linked_role = true # Only if AWSServiceRoleForECS is absent

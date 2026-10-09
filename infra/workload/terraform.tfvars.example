@@ -1,0 +1,10 @@
+aws_region = "eu-west-3"
+project_name = "fargate-demo"
+image_uri = "123456789012.dkr.ecr.eu-west-3.amazonaws.com/fargate-demo@sha256:REPLACE-WITH-64-HEX-DIGEST"
+app_revision = "REPLACE-WITH-40-CHAR-COMMIT-SHA"
+execution_role_arn = "arn:aws:iam::123456789012:role/fargate-demo-execution"
+task_role_arn = "arn:aws:iam::123456789012:role/fargate-demo-task"
+desired_count = 1
+# Prefer your own public IPv4 address /32 for a personal demo.
+allowed_ingress_cidrs = ["0.0.0.0/0"]
+# certificate_arn = "arn:aws:acm:eu-west-3:123456789012:certificate/UUID"
