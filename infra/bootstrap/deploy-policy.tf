@@ -52,6 +52,7 @@ data "aws_iam_policy_document" "deploy" {
       "elasticloadbalancing:Describe*", "elasticloadbalancing:AddTags", "elasticloadbalancing:RemoveTags", "elasticloadbalancing:SetSecurityGroups", "elasticloadbalancing:SetSubnets",
       "ecs:CreateCluster", "ecs:DeleteCluster", "ecs:DescribeClusters", "ecs:UpdateCluster", "ecs:UpdateClusterSettings",
       "ecs:CreateService", "ecs:DeleteService", "ecs:DescribeServices", "ecs:UpdateService", "ecs:RegisterTaskDefinition", "ecs:DeregisterTaskDefinition", "ecs:DescribeTaskDefinition", "ecs:ListTaskDefinitions",
+      "ecs:ListServiceDeployments", "ecs:DescribeServiceDeployments",
       "ecs:TagResource", "ecs:UntagResource", "ecs:ListTagsForResource", "ecs:ListTasks", "ecs:DescribeTasks",
       "logs:CreateLogGroup", "logs:DeleteLogGroup", "logs:DescribeLogGroups", "logs:ListTagsForResource", "logs:TagResource", "logs:UntagResource", "logs:PutRetentionPolicy", "logs:DeleteRetentionPolicy",
       "cloudwatch:PutMetricAlarm", "cloudwatch:DeleteAlarms", "cloudwatch:DescribeAlarms", "cloudwatch:ListTagsForResource", "cloudwatch:TagResource", "cloudwatch:UntagResource"
