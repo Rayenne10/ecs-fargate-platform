@@ -4,7 +4,26 @@
 
 A small FastAPI service deployed through Terraform to AWS ECS Fargate behind an Application Load Balancer. GitHub Actions authenticates through AWS OIDC, builds an immutable ECR release, updates the Terraform-managed task definition and service, and verifies the actual application revision.
 
-This is a portfolio lab, not a claim of a production deployment. See [verification status](docs/VERIFICATION.md) for checks actually executed.
+**Verified on AWS on 9 October 2026; workload subsequently destroyed.** The [deployment workflow](https://github.com/Rayenne10/ecs-fargate-platform/actions/runs/37910617377) checked the actual ECS rollout and application revision. The [cleanup workflow](https://github.com/Rayenne10/ecs-fargate-platform/actions/runs/37914438840) removed all 23 workload resources. Persistent bootstrap resources remain.
+
+This is a portfolio lab. See [verification status](docs/VERIFICATION.md) for executed checks and limits.
+
+## Deployment evidence
+
+![FastAPI dashboard served through the AWS Application Load Balancer](docs/screenshots/01-deployed-dashboard.png)
+
+<details>
+<summary>CI/CD, ECS service health, and ALB target evidence</summary>
+
+![Successful GitHub Actions deployment and checks](docs/screenshots/02-github-actions-success.png)
+
+![ECS service with one running task and a successful deployment](docs/screenshots/03-ecs-service-health.png)
+
+![Healthy ALB target on the application port](docs/screenshots/04-alb-healthy-target.png)
+
+</details>
+
+The screenshots show the completed deployment before cleanup. The live URL is no longer active. The resource calculator's task count is an input for arithmetic; it does not change the actual ECS desired count.
 
 ## Architecture
 
@@ -38,7 +57,13 @@ docker compose ps
 docker compose logs api
 ```
 
-Open <http://localhost:8000>. API docs are at `/docs`, and `/api/info` identifies the served revision.
+Open <http://localhost:8000>. If another project uses port 8000, run:
+
+```sh
+APP_PORT=8001 docker compose up --build -d
+```
+
+Then open <http://localhost:8001>. API docs are at `/docs`, and `/api/info` identifies the served revision.
 
 Without Docker, from the repository root:
 
@@ -102,6 +127,7 @@ The demo exposes no application secrets and has no user database or authenticati
 
 ## Interview preparation
 
-Read [INTERVIEW.md](docs/INTERVIEW.md) for a simple pitch, tradeoffs, and questions. Say “deployed on AWS” only after a real rollout and HTTP verification succeed. The deployment receipt is designed to support that claim.
+Read [INTERVIEW.md](docs/INTERVIEW.md) for a simple pitch, tradeoffs, and questions. The real rollout and HTTP verification succeeded; retain the receipt and screenshots when presenting this project. Rollback and optional HTTPS remain implemented features without a live test claim.
 
 MIT licensed. Developed with AI assistance; personal review and actual deployment evidence should accompany portfolio claims.
+

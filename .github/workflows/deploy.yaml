@@ -24,7 +24,7 @@ jobs:
     uses: ./.github/workflows/ci.yaml
   deploy:
     needs: verify
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 50
     environment: aws-demo
     permissions:
@@ -46,11 +46,11 @@ jobs:
       OPERATION: ${{ github.event_name == 'push' && 'apply' || inputs.operation }}
       REQUESTED_SHA: ${{ inputs.release_sha }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v7.0.0
         with:
           python-version: '3.12'
-      - uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v4.0.1
         with:
           terraform_version: '1.13.5'
           terraform_wrapper: false
@@ -66,13 +66,13 @@ jobs:
           [[ "$RELEASE_SHA" =~ ^[a-f0-9]{40}$ ]] || { echo 'Invalid release SHA'; exit 1; }
           if [ "$OPERATION" != rollback ] && [ "$OPERATION" != destroy ] && [ "$RELEASE_SHA" != "$GITHUB_SHA" ]; then echo 'Use rollback to select an older release'; exit 1; fi
           echo "TF_VAR_app_revision=$RELEASE_SHA" >> "$GITHUB_ENV"
-      - uses: aws-actions/configure-aws-credentials@v5
+      - uses: aws-actions/configure-aws-credentials@v6.3.0
         with:
           role-to-assume: ${{ env.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: fargate-${{ github.run_id }}
           role-duration-seconds: 3600
-      - uses: aws-actions/amazon-ecr-login@v2
+      - uses: aws-actions/amazon-ecr-login@v2.1.7
         id: ecr
       - name: Find the immutable release
         if: env.OPERATION != 'destroy'
@@ -83,9 +83,9 @@ jobs:
           args=()
           if [ "$OPERATION" = rollback ]; then args+=(--required); fi
           python scripts/resolve_image.py --repository "$ECR_REPOSITORY" --revision "$TF_VAR_app_revision" --region "$AWS_REGION" "${args[@]}" >> "$GITHUB_OUTPUT"
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4.4.1
         if: env.OPERATION != 'destroy' && steps.lookup.outputs.exists != 'true'
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7.4.0
         id: build
         if: env.OPERATION != 'destroy' && steps.lookup.outputs.exists != 'true'
         with:
@@ -135,9 +135,16 @@ jobs:
         run: |
           set -euo pipefail
           python scripts/verify_deployment.py --url "$(terraform -chdir=infra/workload output -raw alb_url)" --revision "$TF_VAR_app_revision" --cluster "$(terraform -chdir=infra/workload output -raw ecs_cluster)" --service "$(terraform -chdir=infra/workload output -raw ecs_service)" --task-definition "$(terraform -chdir=infra/workload output -raw task_definition_arn)" --region "$AWS_REGION"
-          echo "Verified release: $TF_VAR_app_revision" >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@v4
+          {
+            echo "## Verified AWS deployment"
+            echo "Application: $(terraform -chdir=infra/workload output -raw alb_url)"
+            echo "Verified release: $TF_VAR_app_revision"
+            echo "Download deployment-receipt-$GITHUB_RUN_ID from this run's Artifacts."
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7.0.2
         if: success() && (env.OPERATION == 'apply' || env.OPERATION == 'rollback')
         with:
           name: deployment-receipt-${{ github.run_id }}
           path: verification/deployment.json
+          if-no-files-found: error
+

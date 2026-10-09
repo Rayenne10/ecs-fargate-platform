@@ -33,3 +33,23 @@ run "reject_wildcard_trust" {
   variables { github_oidc_subject = "repo:Rayenne10/*:environment:aws-demo" }
   expect_failures = [var.github_oidc_subject]
 }
+
+run "create_missing_service_roles" {
+  command = plan
+  variables {
+    create_ecs_service_linked_role = true
+    create_elb_service_linked_role = true
+  }
+  assert {
+    condition     = length(aws_iam_service_linked_role.ecs) == 1 && length(aws_iam_service_linked_role.elb) == 1
+    error_message = "New accounts require both ECS and load-balancing service-linked roles."
+  }
+}
+run "reuse_existing_service_roles" {
+  command = plan
+  assert {
+    condition     = length(aws_iam_service_linked_role.ecs) == 0 && length(aws_iam_service_linked_role.elb) == 0
+    error_message = "Existing account-wide roles must not be created again."
+  }
+}
+

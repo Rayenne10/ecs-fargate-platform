@@ -51,6 +51,10 @@ resource "aws_iam_service_linked_role" "ecs" {
   count            = var.create_ecs_service_linked_role ? 1 : 0
   aws_service_name = "ecs.amazonaws.com"
 }
+resource "aws_iam_service_linked_role" "elb" {
+  count            = var.create_elb_service_linked_role ? 1 : 0
+  aws_service_name = "elasticloadbalancing.amazonaws.com"
+}
 resource "aws_ecr_lifecycle_policy" "app" {
   repository = aws_ecr_repository.app.name
   policy     = jsonencode({ rules = [{ rulePriority = 1, description = "Remove untagged images after seven days", selection = { tagStatus = "untagged", countType = "sinceImagePushed", countUnit = "days", countNumber = 7 }, action = { type = "expire" } }] })
@@ -130,3 +134,4 @@ resource "aws_iam_role_policy" "execution" {
   role   = aws_iam_role.execution.id
   policy = data.aws_iam_policy_document.execution.json
 }
+

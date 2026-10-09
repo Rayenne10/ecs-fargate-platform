@@ -4,7 +4,7 @@
 
 “This project automates deployment of a stateless FastAPI service on AWS ECS Fargate. Terraform provisions the VPC, load balancer, task/service configuration and logging. A separate bootstrap creates ECR, locked S3 state and IAM/OIDC foundations. GitHub Actions checks the application and infrastructure, builds an immutable image, and uses short-lived OIDC credentials to apply the new image through Terraform. It verifies both the actual ECS revision and the revision served through the ALB. The default architecture is a small demo with an explicitly documented networking and cost tradeoff.”
 
-Only add “I deployed it successfully” after your own real AWS verification. State which actions you personally reviewed, ran, or changed in this AI-assisted implementation.
+The AWS deployment and cleanup were completed on 9 October 2026; links and screenshots are in [VERIFICATION.md](VERIFICATION.md). Explain the configuration and permission issues you encountered, and state which actions you personally reviewed, ran, or changed in this AI-assisted implementation.
 
 ## Questions and answers
 
@@ -32,20 +32,20 @@ Only add “I deployed it successfully” after your own real AWS verification. 
 
 **Is it highly available?** The ALB/subnets span two zones, but one default task is not redundant running capacity. Two tasks improve capacity redundancy; it does not replace a full reliability analysis, scaling policy or load tests.
 
-**What did you test?** Refer to VERIFICATION.md: API tests, script failure behavior, Terraform validation/mock plans, and any actual CI/container/browser runs. Mock provider plans do not prove AWS permissions or service integration.
+**What did you test?** API and deployment-script tests, Terraform validation/mock plans, browser and container checks passed in CI. The live AWS run verified the intended ECS task definition and HTTP revision through the ALB; CloudWatch logs and healthy targets were inspected. Cleanup destroyed 23 workload resources. Rollback, HTTPS, load and failover experiments remain untested. Mock provider plans alone do not prove AWS permissions or service integration.
 
-**What would you improve?** First complete real deployment, failed-release and cleanup experiments. Then evaluate private networking, scoped resource IAM, autoscaling, TLS/DNS automation, and operational alerts against concrete needs.
+**What would you improve?** Next test a failed release and previous-release rollback, then optional HTTPS. Evaluate private networking, scoped resource IAM, autoscaling and operational alerts against concrete needs. Deployment and workload cleanup have already been verified.
 
 ## A five-minute demo
 
 1. Show the API workspace and revision.
 2. Trace commit → ECR digest → Terraform task definition → ECS → ALB response.
 3. Show OIDC trust and distinct IAM roles; explain no long-lived CI access keys.
-4. Show CI, a real deployment receipt if available, and JSON logs.
+4. Show the successful CI run, deployment receipt, saved screenshots and CloudWatch request logs. The workload was destroyed after verification, so use these records unless you deliberately redeploy.
 5. Explain networking tradeoffs, rollback verification and cleanup.
 
 ## CV wording
 
-Before cloud verification: “Implemented Terraform infrastructure and an OIDC-authenticated GitHub Actions pipeline for a containerized FastAPI service on ECS Fargate, with ALB routing, ECR, IAM and CloudWatch logging.”
+“Provisioned and verified a containerized FastAPI service on AWS ECS Fargate using Terraform, ALB, ECR, IAM and CloudWatch; automated image delivery and deployment through GitHub Actions OIDC.”
 
-After successful AWS verification: “Provisioned and deployed...” becomes defensible. Do not invent uptime, savings, users or availability figures.
+Do not invent uptime, savings, users or availability figures. Keep implemented rollback and optional HTTPS separate from features tested on AWS.

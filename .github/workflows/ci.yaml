@@ -9,13 +9,13 @@ permissions:
   contents: read
 jobs:
   python:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         python: ['3.11', '3.12']
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v7.0.0
         with:
           python-version: ${{ matrix.python }}
           cache: pip
@@ -24,15 +24,15 @@ jobs:
       - run: ruff format --check .
       - run: pytest -q --junitxml=test-results.xml
       - run: python scripts/http_smoke.py
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: tests-python-${{ matrix.python }}
           path: test-results.xml
   terraform:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
+      - uses: actions/checkout@v7.0.1
+      - uses: hashicorp/setup-terraform@v4.0.1
         with:
           terraform_version: '1.13.5'
       - run: terraform fmt -check -recursive infra
@@ -44,13 +44,13 @@ jobs:
       - run: terraform -chdir=infra/workload test
   browser:
     needs: python
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v7.0.0
         with:
           python-version: '3.12'
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7.1.0
         with:
           node-version: '24'
           cache: npm
@@ -58,17 +58,17 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run test:browser
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: browser-screenshots
           path: verification/*.png
   container:
     needs: [python, terraform, browser]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/build-push-action@v6
+      - uses: actions/checkout@v7.0.1
+      - uses: docker/setup-buildx-action@v4.4.1
+      - uses: docker/build-push-action@v7.4.0
         with:
           context: .
           load: true
@@ -89,3 +89,4 @@ jobs:
           curl -fsS http://127.0.0.1:8000/api/info | jq -e --arg sha "$GITHUB_SHA" '.revision == $sha'
           curl -fsS -H 'Content-Type: application/json' -d '{"task_count":2}' http://127.0.0.1:8000/api/capacity | jq -e '.total_vcpu == 0.5 and .total_memory_gib == 1'
           test "$(docker inspect -f '{{.Config.User}}' platform)" = '10001:10001'
+

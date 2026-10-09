@@ -2,7 +2,7 @@
 
 ## 1. Prerequisites and local run
 
-Install Docker Desktop, Git, Python 3.11+, AWS CLI v2, and Terraform 1.13.5. Windows Git Bash is supported for these commands; use `python`/`python.exe` as configured locally. Clone the repository and run `docker compose up --build -d` before provisioning anything.
+Install Docker Desktop, Git, Python 3.11+, AWS CLI v2 (2.32.0+ for browser login), and Terraform 1.13.5 or another version allowed by `versions.tf`. Windows Git Bash is supported for these commands; use `python`/`python.exe` as configured locally. Clone the repository and run `docker compose up --build -d` before provisioning anything. If port 8000 is already occupied, run `APP_PORT=8001 docker compose up --build -d` and open `http://localhost:8001`; the container still listens on 8000.
 
 Use a dedicated AWS lab account if possible. The CI deployment role is region-restricted but can manage regional networking/ECS/ELB resources, not just perfectly isolated project resources. Read `infra/bootstrap/deploy-policy.tf` before granting it in a shared account.
 
@@ -11,6 +11,19 @@ Authenticate locally using your normal AWS CLI profile or IAM Identity Center se
 ```sh
 aws sts get-caller-identity
 ```
+
+For browser-based console login, use a separate sign-in profile and a credential-process profile that Terraform can consume:
+
+```sh
+aws configure set region eu-west-3 --profile fargate-signin
+aws login --profile fargate-signin
+aws configure set credential_process "aws configure export-credentials --profile fargate-signin --format process" --profile fargate-terraform
+aws configure set region eu-west-3 --profile fargate-terraform
+export AWS_PROFILE=fargate-terraform
+aws sts get-caller-identity
+```
+
+Re-run `aws login --profile fargate-signin` when the browser session expires. Set `AWS_PROFILE` again in each new terminal.
 
 Keep credentials out of Git, Terraform variables, and chat. Terraform automatically uses the CLI/environment credential chain. Bootstrap needs appropriate S3, ECR, IAM/OIDC permissions; routine CI does not receive permission to create IAM roles.
 
@@ -24,13 +37,14 @@ If `token.actions.githubusercontent.com` already exists as an IAM OIDC provider 
 
 ## 3. Bootstrap persistent foundations
 
-Check the account-wide ECS service-linked role before bootstrap:
+Check both account-wide service-linked roles before bootstrap:
 
 ```sh
 aws iam get-role --role-name AWSServiceRoleForECS
+aws iam get-role --role-name AWSServiceRoleForElasticLoadBalancing
 ```
 
-If it is genuinely absent (not an access-denied error), set `create_ecs_service_linked_role=true` in bootstrap variables. CI cannot create IAM roles, so this initial account setup must be handled by the local operator. Leave it false when the role already exists. A shared existing role is not owned by this stack.
+For a `NoSuchEntity` result, set the corresponding bootstrap variable to true: `create_ecs_service_linked_role` for ECS and `create_elb_service_linked_role` for Elastic Load Balancing. An access-denied error does not establish absence. Leave each flag false when its role already exists, including roles created manually during an earlier attempt. Shared existing roles remain outside this stack. CI cannot create IAM roles; the local operator handles this initial setup.
 
 ```sh
 cp infra/bootstrap/terraform.tfvars.example infra/bootstrap/terraform.tfvars
@@ -86,10 +100,14 @@ Terraform waits for ECS steady state. The follow-up verifier checks the service'
 
 ```sh
 aws ecs describe-services --cluster fargate-demo --services fargate-demo --region eu-west-3
-aws logs tail /ecs/fargate-demo --follow --region eu-west-3
+MSYS_NO_PATHCONV=1 aws logs tail /ecs/fargate-demo --follow --region eu-west-3
 ```
 
+The `MSYS_NO_PATHCONV` setting prevents Windows Git Bash from rewriting the log-group path.
+
 Use the workflow receipt URL to inspect the workspace and `/api/info`. ECS/ALB health and logs are useful together: a running task alone does not prove the service is reachable.
+
+If a deployment fails partway through, Terraform retains created resources in remote state. Fix the cause, then run a new plan/apply. Do not delete state or create duplicate resources. If a repository fix changed the bootstrap policy, pull it locally and plan/apply bootstrap first.
 
 ## 7. Rollback and cleanup
 
@@ -101,3 +119,4 @@ Follow [OPERATIONS.md](OPERATIONS.md). Disable auto-deployment before cleanup, o
 - [Terraform S3 backend and lockfile permissions](https://developer.hashicorp.com/terraform/language/backend/s3)
 - [Fargate outbound networking](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/networking-outbound.html)
 - [ECS with ALB/IP target groups](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/alb.html)
+

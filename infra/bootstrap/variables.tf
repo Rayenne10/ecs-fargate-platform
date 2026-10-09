@@ -32,3 +32,10 @@ variable "create_ecs_service_linked_role" {
   default     = false
   description = "Set true only if AWSServiceRoleForECS does not already exist in the account."
 }
+
+variable "create_elb_service_linked_role" {
+  type        = bool
+  default     = false
+  description = "Set true only if AWSServiceRoleForElasticLoadBalancing does not already exist in the account."
+}
+
