@@ -1,5 +1,7 @@
 # ECS Fargate Platform - Cloud Deployment & IaC Automation
 
+[![CI](https://github.com/Rayenne10/ecs-fargate-platform/actions/workflows/ci.yaml/badge.svg)](https://github.com/Rayenne10/ecs-fargate-platform/actions/workflows/ci.yaml)
+
 A small FastAPI service deployed through Terraform to AWS ECS Fargate behind an Application Load Balancer. GitHub Actions authenticates through AWS OIDC, builds an immutable ECR release, updates the Terraform-managed task definition and service, and verifies the actual application revision.
 
 This is a portfolio lab, not a claim of a production deployment. See [verification status](docs/VERIFICATION.md) for checks actually executed.
