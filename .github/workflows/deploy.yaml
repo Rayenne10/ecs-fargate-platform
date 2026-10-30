@@ -47,7 +47,7 @@ jobs:
       REQUESTED_SHA: ${{ inputs.release_sha }}
     steps:
       - uses: actions/checkout@v7.0.1
-      - uses: actions/setup-python@v7.0.0
+      - uses: actions/setup-python@v7.1.0
         with:
           python-version: '3.12'
       - uses: hashicorp/setup-terraform@v4.0.1
