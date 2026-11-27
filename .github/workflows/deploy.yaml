@@ -72,7 +72,7 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: fargate-${{ github.run_id }}
           role-duration-seconds: 3600
-      - uses: aws-actions/amazon-ecr-login@v2.1.7
+      - uses: aws-actions/amazon-ecr-login@v2.2.0
         id: ecr
       - name: Find the immutable release
         if: env.OPERATION != 'destroy'
